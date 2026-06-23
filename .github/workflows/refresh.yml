@@ -1,0 +1,41 @@
+name: Làm mới dữ liệu bưu cục
+
+on:
+  schedule:
+    - cron: "0 22 * * *"   # 22:00 UTC = 05:00 sáng VN, mỗi ngày 1 lần
+  workflow_dispatch: {}     # cho phép bấm chạy tay
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-buu-cuc
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dựng lại index.html từ dữ liệu mới
+        env:
+          GHN_DATA_TOKEN: ${{ secrets.GHN_DATA_TOKEN }}
+        run: python build.py
+
+      - name: Commit & push nếu có thay đổi
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain index.html)" ]; then
+            git add index.html
+            git commit -m "chore: làm mới dữ liệu bưu cục $(date -u +%F)"
+            git push
+            echo "Đã cập nhật index.html."
+          else
+            echo "Không có thay đổi dữ liệu."
+          fi
