@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-# Tự sinh index.html cho bản đồ bưu cục GHN.
-#  - Toạ độ + địa chỉ: KML Google My Maps (công khai)
-#  - Trạng thái hoạt động: data-gateway nội bộ (token qua biến môi trường GHN_DATA_TOKEN)
+# Tự sinh index.html cho bản đồ bưu cục GHN (chạy bởi GitHub Action mỗi ngày).
+#  - Toạ độ + địa chỉ cũ: KML Google My Maps (công khai)
+#  - Trạng thái hoạt động: data-gateway nội bộ (token qua env GHN_DATA_TOKEN)
+#  - Địa chỉ MỚI 2025: bảng tra ma->địa chỉ mới (diachi-moi-map.json, đã point-in-polygon sẵn)
 import os, sys, json, re
 import html as _html
 import urllib.request
@@ -10,14 +11,14 @@ import xml.etree.ElementTree as ET
 MID="1p0y8EJ18YIuYJumMUTc1yArTaGm2Fcc"
 TOKEN=os.environ.get("GHN_DATA_TOKEN","").strip()
 OUT=os.environ.get("OUT","index.html")
+DIACHI_MAP=os.environ.get("DIACHI_MAP","diachi-moi-map.json")
 GATEWAY="https://app.ghn.studio/api/data-gateway/query"
+UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 if not TOKEN:
     print("ERROR: thiếu GHN_DATA_TOKEN", file=sys.stderr); sys.exit(1)
 
-UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 def http_get(url):
-    req=urllib.request.Request(url, headers={"User-Agent":UA})
-    return urllib.request.urlopen(req, timeout=120).read()
+    return urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent":UA}), timeout=120).read()
 def http_post_json(url, payload, headers):
     h={"Content-Type":"application/json","User-Agent":UA,"Accept":"application/json"}; h.update(headers)
     req=urllib.request.Request(url, data=json.dumps(payload).encode(), headers=h, method="POST")
@@ -56,22 +57,31 @@ res=http_post_json(GATEWAY, {"endpoint":"buu-cuc-ghn","limit":6000}, {"Authoriza
 api=res.get("data") or []
 active={str(r["warehouse_id"]) for r in api if r.get("is_enabled") and r.get("status_hrw")==1}
 
+try: dmap=json.load(open(DIACHI_MAP, encoding="utf-8"))
+except Exception as e: print("WARN: không đọc được %s (%s) -> địa chỉ mới rỗng" % (DIACHI_MAP,e), file=sys.stderr); dmap={}
+
 feats=[]
 for ma,k in kml_by_ma.items():
     if ma not in active: continue
     try: lng=float(k["lng"]); lat=float(k["lat"])
     except: continue
+    m=dmap.get(ma)
     feats.append({"type":"Feature","geometry":{"type":"Point","coordinates":[lng,lat]},
-        "properties":{"ma":ma,"ten":k["ten"],"tinh":k["tinh"],"huyen":k["huyen"],"phuong":k["phuong"],"diachi":k["diachi"]}})
+        "properties":{"ma":ma,"ten":k["ten"],"tinh":k["tinh"],"huyen":k["huyen"],"phuong":k["phuong"],"diachi":k["diachi"],
+            "tinh_moi":(m["tinh"] if m else ""),"phuong_moi":(m["phuong"] if m else "")}})
 
 if len(feats)<500:
     print("ERROR: chỉ %d BC, nghi nguồn lỗi -> hủy build" % len(feats), file=sys.stderr); sys.exit(1)
 
-provs=sorted({f["properties"]["tinh"] for f in feats}, key=lambda s:s.lower())
-geojson_min=json.dumps({"type":"FeatureCollection","features":feats}, ensure_ascii=False, separators=(",",":"))
-provs_js=json.dumps(provs, ensure_ascii=False)
+fc={"type":"FeatureCollection","features":feats}
+provs_old=sorted({f["properties"].get("tinh","") for f in feats if f["properties"].get("tinh")}, key=lambda s:s.lower())
+provs_new=sorted({f["properties"].get("tinh_moi","") for f in feats if f["properties"].get("tinh_moi")}, key=lambda s:s.lower())
+geojson_min=json.dumps(fc, ensure_ascii=False, separators=(",",":"))
+provs_old_js=json.dumps(provs_old, ensure_ascii=False)
+provs_new_js=json.dumps(provs_new, ensure_ascii=False)
 total=len(feats)
-print("BC active: %d | tinh: %d | api rows: %d | active ids: %d" % (total,len(provs),len(api),len(active)))
+new_cnt=sum(1 for f in feats if f["properties"]["tinh_moi"])
+print("BC active: %d | có địa chỉ mới: %d | tỉnh cũ: %d | tỉnh mới: %d" % (total,new_cnt,len(provs_old),len(provs_new)))
 
 TPL = r"""<!DOCTYPE html>
 <html lang="vi">
@@ -148,6 +158,10 @@ TPL = r"""<!DOCTYPE html>
         <button id="near" class="btn primary">📍 Bưu cục gần tôi</button>
         <div class="seg"><button id="bLight" class="on">Sáng</button><button id="bDark">Tối</button></div>
       </div>
+      <div class="row-btns">
+        <span style="font-size:13px;color:var(--muted);align-self:center;">Địa chỉ:</span>
+        <div class="seg" style="flex:1;"><button id="aOld" class="on" style="flex:1;">Cũ</button><button id="aNew" style="flex:1;">Mới (2025)</button></div>
+      </div>
     </div>
     <div class="count">Đang hiển thị <b id="cnt">0</b> bưu cục</div>
     <div id="list"></div>
@@ -157,8 +171,13 @@ TPL = r"""<!DOCTYPE html>
 
 <script>
 const DATA = __GEOJSON__;
-const PROVINCES = __PROVINCES__;
+const PROVINCES_OLD = __PROVINCES_OLD__;
+const PROVINCES_NEW = __PROVINCES_NEW__;
 const ALL = DATA.features;
+let addrMode = "cu";   // "cu" = địa chỉ cũ (3 cấp), "moi" = địa chỉ mới 2025 (2 cấp)
+function provOf(p){ return addrMode==="moi" ? (p.tinh_moi||"") : (p.tinh||""); }
+function wardKeyOf(p){ return addrMode==="moi" ? (p.phuong_moi||"") : ((p.huyen||"")+"|||"+(p.phuong||"")); }
+function wardLabelOf(p){ return addrMode==="moi" ? (p.phuong_moi||"") : ((p.phuong||"") + (p.huyen? " — "+p.huyen : "")); }
 
 // ==== NỀN BẢN ĐỒ (MapTiler vector — Hoàng Sa/Trường Sa tiếng Việt) ====
 const MAPTILER_KEY = "RsMVLUahBV8V4aHHyxoJ";
@@ -191,9 +210,15 @@ map.on("idle", _ensureGhn);
 const popup = new maplibregl.Popup({ offset:14, closeButton:true, maxWidth:"300px" });
 function popHTML(p, c){
   const dir = c ? `<a class="pop-dir" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${c[1]},${c[0]}">🧭 Chỉ đường</a>` : "";
+  const oldLine = [p.phuong, p.huyen, p.tinh].filter(Boolean).join(", ");
+  const newLine = [p.phuong_moi, p.tinh_moi].filter(Boolean).join(", ") || "(chưa có)";
+  const primary = addrMode==="moi" ? newLine : oldLine;
+  const secLab  = addrMode==="moi" ? "Địa chỉ cũ" : "Địa chỉ mới (2025)";
+  const secVal  = addrMode==="moi" ? oldLine : newLine;
   return `<div>
     <p class="pop-nm">${p.ten||""}</p>
-    <p class="pop-ad">${p.diachi||""}<br><b>${p.phuong||""}${p.phuong?", ":""}${p.huyen||""}, ${p.tinh||""}</b></p>
+    <p class="pop-ad">${p.diachi||""}<br><b>${primary}</b></p>
+    <p style="font-size:11.5px;color:#8a93a3;margin:6px 0 0;">${secLab}: ${secVal}</p>
     ${dir}</div>`;
 }
 
@@ -263,15 +288,19 @@ const elList=document.getElementById("list");
 const elWard=document.getElementById("ward");
 let current=[]; let firstApply=true; let userLoc=null; let nearestMode=false; let userMarker=null;
 
-function buildProvinces(){ PROVINCES.forEach(p=>{ const o=document.createElement("option"); o.value=p; o.textContent=p; selProv.appendChild(o); }); }
+function buildProvinces(){
+  const list = addrMode==="moi" ? PROVINCES_NEW : PROVINCES_OLD;
+  selProv.innerHTML='<option value="">Tất cả tỉnh / thành phố</option>';
+  list.forEach(p=>{ const o=document.createElement("option"); o.value=p; o.textContent=p; selProv.appendChild(o); });
+}
 function buildWards(prov){
   elWard.innerHTML='<option value="">Tất cả phường / xã</option>';
   if(!prov){ elWard.disabled=true; return; }
   const seen=new Set(), opts=[];
-  for(const f of ALL){ const pr=f.properties; if(pr.tinh!==prov || !pr.phuong) continue;
-    const key=pr.huyen+"|||"+pr.phuong;
-    if(seen.has(key)) continue; seen.add(key);
-    opts.push({key, label: pr.phuong + (pr.huyen? " — "+pr.huyen : "")});
+  for(const f of ALL){ const pr=f.properties; if(provOf(pr)!==prov) continue;
+    const key=wardKeyOf(pr), lbl=wardLabelOf(pr);
+    if(!lbl || key==="|||" || seen.has(key)) continue; seen.add(key);
+    opts.push({key, label: lbl});
   }
   opts.sort((a,b)=>a.label.localeCompare(b.label,"vi"));
   for(const o of opts){ const e=document.createElement("option"); e.value=o.key; e.textContent=o.label; elWard.appendChild(e); }
@@ -287,9 +316,9 @@ function apply(){
   const p=selProv.value, w=elWard.value, q=norm(inpQ.value).trim();
   current = ALL.filter(f=>{
     const pr=f.properties;
-    if(p && pr.tinh!==p) return false;
-    if(w){ const wp=w.split("|||"); if(pr.huyen!==wp[0]||pr.phuong!==wp[1]) return false; }
-    if(q && !(norm(pr.ten).includes(q)||norm(pr.diachi).includes(q)||norm(pr.huyen).includes(q)||norm(pr.phuong).includes(q))) return false;
+    if(p && provOf(pr)!==p) return false;
+    if(w && wardKeyOf(pr)!==w) return false;
+    if(q && !(norm(pr.ten).includes(q)||norm(pr.diachi).includes(q)||norm(pr.huyen).includes(q)||norm(pr.phuong).includes(q)||norm(pr.tinh).includes(q)||norm(pr.phuong_moi).includes(q)||norm(pr.tinh_moi).includes(q))) return false;
     return true;
   });
   if(map.getSource("bc")) map.getSource("bc").setData({ type:"FeatureCollection", features:current });
@@ -310,7 +339,7 @@ function renderList(){
   const frag=document.createDocumentFragment();
   current.slice(0,400).forEach(f=>{
     const p=f.properties;
-    const meta = (nearestMode && userLoc) ? `${fmtKm(km(userLoc,f.geometry.coordinates))} · ${p.tinh||""}` : (p.tinh||"");
+    const meta = (nearestMode && userLoc) ? `${fmtKm(km(userLoc,f.geometry.coordinates))} · ${provOf(p)||""}` : (provOf(p)||"");
     const d=document.createElement("div"); d.className="item";
     d.innerHTML=`<div class="nm">${p.ten||""}</div><div class="ad">${p.diachi||""}</div><div class="mc">${meta}</div>`;
     d.onclick=()=>{
@@ -372,13 +401,27 @@ elWard.addEventListener("change", apply);
 let t; inpQ.addEventListener("input", ()=>{ clearTimeout(t); t=setTimeout(apply,250); });
 document.getElementById("bLight").addEventListener("click", ()=>setBase("light"));
 document.getElementById("bDark").addEventListener("click", ()=>setBase("dark"));
+
+// ==== Chuyển địa chỉ Cũ / Mới ====
+function setAddrMode(m){
+  if(addrMode===m) return;
+  addrMode=m;
+  document.getElementById("aOld").classList.toggle("on", m==="cu");
+  document.getElementById("aNew").classList.toggle("on", m==="moi");
+  selProv.value=""; inpQ.value=""; buildWards(""); elWard.value="";
+  buildProvinces();
+  apply();
+}
+document.getElementById("aOld").addEventListener("click", ()=>setAddrMode("cu"));
+document.getElementById("aNew").addEventListener("click", ()=>setAddrMode("moi"));
 </script>
 </body>
 </html>
 """
 
 html = (TPL.replace("__GEOJSON__", geojson_min)
-           .replace("__PROVINCES__", provs_js)
+           .replace("__PROVINCES_OLD__", provs_old_js)
+           .replace("__PROVINCES_NEW__", provs_new_js)
            .replace("__TOTAL__", "{:,}".format(total).replace(",", ".")))
 open(OUT,"w",encoding="utf-8").write(html)
 print("Wrote %s (%d bytes)" % (OUT, len(html)))
