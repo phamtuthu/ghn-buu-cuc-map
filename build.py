@@ -241,10 +241,10 @@ function addOverlays(){
       "heatmap-weight":["interpolate",["linear"],["zoom"], 4,0.7, 11,1],
       "heatmap-intensity":["interpolate",["linear"],["zoom"], 4,1.1, 8,1.8, 11,3],
       "heatmap-radius":["interpolate",["linear"],["zoom"], 4,16, 7,26, 9,34, 12,48],
-      "heatmap-opacity":["interpolate",["linear"],["zoom"], 4,0.85, 9.5,0.8, 12,0],
+      "heatmap-opacity":["interpolate",["linear"],["zoom"], 4,0.72, 9.5,0.62, 12,0],
       "heatmap-color":["interpolate",["linear"],["heatmap-density"],
-        0,"rgba(244,121,32,0)", 0.15,"rgba(255,214,153,0.55)", 0.35,"rgb(255,178,89)",
-        0.55,"rgb(247,138,52)", 0.75,"rgb(232,82,30)", 1,"rgb(192,40,20)"]
+        0,"rgba(59,82,139,0)", 0.15,"rgba(59,82,139,0.55)", 0.4,"rgb(33,145,140)",
+        0.65,"rgb(94,201,98)", 0.85,"rgb(180,222,44)", 1,"rgb(253,231,37)"]
     }}, "island-dot");
   if(!map.getLayer("clusters")) map.addLayer({ id:"clusters", type:"circle", source:"bc", filter:["has","point_count"],
     paint:{ "circle-color":["step",["get","point_count"], "#FFC78A", 25, "#F89B3F", 120, "#EA5B22"],
