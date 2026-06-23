@@ -29,6 +29,7 @@
   .seg{ display:flex; border:1px solid #dfe3ea; border-radius:10px; overflow:hidden; flex:0 0 auto; }
   .seg button{ padding:0 14px; border:0; background:#fff; cursor:pointer; font-size:13px; font-weight:600; color:var(--muted); }
   .seg button.on{ background:var(--ink); color:#fff; }
+  .controls select:disabled{ background:#f4f5f7; color:#aab2c0; cursor:not-allowed; }
   .count{ font-size:13px; color:var(--muted); padding:10px 20px 6px; }
   .count b{ color:var(--ghn-dark); }
   #list{ flex:1; overflow:auto; padding:0 10px 10px; }
@@ -66,6 +67,7 @@
     </div>
     <div class="controls">
       <select id="prov"><option value="">Tất cả tỉnh / thành phố</option></select>
+      <select id="ward" disabled><option value="">Tất cả phường / xã</option></select>
       <input id="q" type="search" placeholder="Tìm theo tên hoặc địa chỉ bưu cục…"/>
       <div class="row-btns">
         <button id="near" class="btn primary">📍 Bưu cục gần tôi</button>
@@ -183,9 +185,23 @@ const selProv=document.getElementById("prov");
 const inpQ=document.getElementById("q");
 const elCnt=document.getElementById("cnt");
 const elList=document.getElementById("list");
+const elWard=document.getElementById("ward");
 let current=[]; let firstApply=true; let userLoc=null; let nearestMode=false; let userMarker=null;
 
 function buildProvinces(){ PROVINCES.forEach(p=>{ const o=document.createElement("option"); o.value=p; o.textContent=p; selProv.appendChild(o); }); }
+function buildWards(prov){
+  elWard.innerHTML='<option value="">Tất cả phường / xã</option>';
+  if(!prov){ elWard.disabled=true; return; }
+  const seen=new Set(), opts=[];
+  for(const f of ALL){ const pr=f.properties; if(pr.tinh!==prov || !pr.phuong) continue;
+    const key=pr.huyen+"|||"+pr.phuong;
+    if(seen.has(key)) continue; seen.add(key);
+    opts.push({key, label: pr.phuong + (pr.huyen? " — "+pr.huyen : "")});
+  }
+  opts.sort((a,b)=>a.label.localeCompare(b.label,"vi"));
+  for(const o of opts){ const e=document.createElement("option"); e.value=o.key; e.textContent=o.label; elWard.appendChild(e); }
+  elWard.disabled=false;
+}
 function norm(s){ return (s||"").toLowerCase(); }
 function km(a,b){ const R=6371,r=x=>x*Math.PI/180; const dLat=r(b[1]-a[1]),dLng=r(b[0]-a[0]);
   const s=Math.sin(dLat/2)**2+Math.cos(r(a[1]))*Math.cos(r(b[1]))*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(s)); }
@@ -193,10 +209,11 @@ function fmtKm(d){ return d<1 ? Math.round(d*1000)+" m" : d.toFixed(1).replace("
 
 function apply(){
   nearestMode=false;
-  const p=selProv.value, q=norm(inpQ.value).trim();
+  const p=selProv.value, w=elWard.value, q=norm(inpQ.value).trim();
   current = ALL.filter(f=>{
     const pr=f.properties;
     if(p && pr.tinh!==p) return false;
+    if(w){ const wp=w.split("|||"); if(pr.huyen!==wp[0]||pr.phuong!==wp[1]) return false; }
     if(q && !(norm(pr.ten).includes(q)||norm(pr.diachi).includes(q)||norm(pr.huyen).includes(q)||norm(pr.phuong).includes(q))) return false;
     return true;
   });
@@ -245,7 +262,7 @@ document.getElementById("near").addEventListener("click", ()=>{
     userLoc=[pos.coords.longitude, pos.coords.latitude];
     if(userMarker) userMarker.remove();
     userMarker=new maplibregl.Marker({color:"#2d7ef7"}).setLngLat(userLoc).addTo(map);
-    selProv.value=""; inpQ.value="";
+    selProv.value=""; inpQ.value=""; buildWards(""); elWard.value="";
     current=[...ALL].sort((a,b)=>km(userLoc,a.geometry.coordinates)-km(userLoc,b.geometry.coordinates));
     nearestMode=true;
     if(map.getSource("bc")) map.getSource("bc").setData({ type:"FeatureCollection", features:current });
@@ -265,7 +282,7 @@ function autoLocate(){
     if(best>30){ userLoc=null; return; }   // ở xa khu vực có bưu cục -> giữ view toàn quốc
     if(userMarker) userMarker.remove();
     userMarker=new maplibregl.Marker({color:"#2d7ef7"}).setLngLat(userLoc).addTo(map);
-    selProv.value=""; inpQ.value="";
+    selProv.value=""; inpQ.value=""; buildWards(""); elWard.value="";
     current=[...ALL].sort((a,b)=>km(userLoc,a.geometry.coordinates)-km(userLoc,b.geometry.coordinates));
     nearestMode=true;
     if(map.getSource("bc")) map.getSource("bc").setData({ type:"FeatureCollection", features:current });
@@ -275,7 +292,8 @@ function autoLocate(){
   }, ()=>{}, {enableHighAccuracy:true, timeout:8000});
 }
 
-selProv.addEventListener("change", apply);
+selProv.addEventListener("change", ()=>{ buildWards(selProv.value); apply(); });
+elWard.addEventListener("change", apply);
 let t; inpQ.addEventListener("input", ()=>{ clearTimeout(t); t=setTimeout(apply,250); });
 document.getElementById("bLight").addEventListener("click", ()=>setBase("light"));
 document.getElementById("bDark").addEventListener("click", ()=>setBase("dark"));
