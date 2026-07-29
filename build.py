@@ -2,7 +2,7 @@
 # Tự sinh index.html cho bản đồ bưu cục GHN (chạy bởi GitHub Action mỗi ngày).
 #  - Toạ độ + địa chỉ cũ: KML Google My Maps (công khai)
 #  - Trạng thái hoạt động: data-gateway nội bộ (token qua env GHN_DATA_TOKEN)
-#  - Địa chỉ MỚI 2025: bảng tra ma->địa chỉ mới (diachi-moi-map.json, đã point-in-polygon sẵn)
+#  - Địa chỉ MỚI 2026: bảng tra ma->địa chỉ mới (diachi-moi-map.json, đã point-in-polygon sẵn)
 import os, sys, json, re
 import html as _html
 import urllib.request
@@ -160,7 +160,7 @@ TPL = r"""<!DOCTYPE html>
       </div>
       <div class="row-btns">
         <span style="font-size:13px;color:var(--muted);align-self:center;">Địa chỉ:</span>
-        <div class="seg" style="flex:1;"><button id="aOld" class="on" style="flex:1;">Cũ</button><button id="aNew" style="flex:1;">Mới (2025)</button></div>
+        <div class="seg" style="flex:1;"><button id="aOld" class="on" style="flex:1;">Cũ</button><button id="aNew" style="flex:1;">Mới (2026)</button></div>
       </div>
     </div>
     <div class="count">Đang hiển thị <b id="cnt">0</b> bưu cục</div>
@@ -174,7 +174,7 @@ const DATA = __GEOJSON__;
 const PROVINCES_OLD = __PROVINCES_OLD__;
 const PROVINCES_NEW = __PROVINCES_NEW__;
 const ALL = DATA.features;
-let addrMode = "cu";   // "cu" = địa chỉ cũ (3 cấp), "moi" = địa chỉ mới 2025 (2 cấp)
+let addrMode = "cu";   // "cu" = địa chỉ cũ (3 cấp), "moi" = địa chỉ mới 2026 (2 cấp)
 function provOf(p){ return addrMode==="moi" ? (p.tinh_moi||"") : (p.tinh||""); }
 function wardKeyOf(p){ return addrMode==="moi" ? (p.phuong_moi||"") : ((p.huyen||"")+"|||"+(p.phuong||"")); }
 function wardLabelOf(p){ return addrMode==="moi" ? (p.phuong_moi||"") : ((p.phuong||"") + (p.huyen? " — "+p.huyen : "")); }
@@ -214,7 +214,7 @@ function popHTML(p, c){
   const oldLine = [p.phuong, p.huyen, p.tinh].filter(Boolean).join(", ");
   const newLine = [p.phuong_moi, p.tinh_moi].filter(Boolean).join(", ") || "(chưa có)";
   const primary = addrMode==="moi" ? newLine : oldLine;
-  const secLab  = addrMode==="moi" ? "Địa chỉ cũ" : "Địa chỉ mới (2025)";
+  const secLab  = addrMode==="moi" ? "Địa chỉ cũ" : "Địa chỉ mới (2026)";
   const secVal  = addrMode==="moi" ? oldLine : newLine;
   return `<div>
     <p class="pop-nm">${p.ten||""}</p>
