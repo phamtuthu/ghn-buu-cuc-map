@@ -45,12 +45,6 @@
   .pop-ad{ margin:0; color:#444; font-size:13px; }
   .pop-dir{ display:inline-flex; align-items:center; gap:6px; margin-top:11px; font-size:13px; font-weight:700; color:var(--ghn-dark); text-decoration:none; }
   .pop-dir:hover{ text-decoration:underline; }
-  .legend{ position:absolute; left:10px; bottom:10px; z-index:1; background:rgba(255,255,255,.96); border:1px solid var(--line); border-radius:12px; padding:9px 12px; font-size:12.5px; font-weight:600; color:var(--ink); box-shadow:0 4px 16px rgba(0,0,0,.14); max-height:46vh; overflow:auto; }
-  .legend .lg-row{ display:flex; align-items:center; gap:8px; min-width:190px; }
-  .legend .lg-row .lg-nm{ white-space:nowrap; }
-  .legend .lg-row + .lg-row{ margin-top:4px; }
-  .legend .lg-row b{ margin-left:auto; color:var(--muted); font-weight:700; font-variant-numeric:tabular-nums; }
-  .lg-dot{ width:13px; height:13px; border-radius:50%; flex:0 0 auto; box-shadow:0 0 0 1.5px #fff, 0 0 0 3px rgba(0,0,0,.10); }
   .rg-dot{ display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; vertical-align:middle; box-shadow:0 0 0 1px #fff; }
   @media (max-width:768px){
     #app{ flex-direction:column; }
@@ -89,7 +83,6 @@
     <div id="list"></div>
   </aside>
   <div id="map">
-    <div class="legend" id="legend"></div>
   </div>
 </div>
 
@@ -189,7 +182,7 @@ map.on("click","point-dot",onPointClick);
   map.on("mouseleave",l,()=>map.getCanvas().style.cursor="");
 });
 
-map.on("load", ()=>{ addOverlays(); buildProvinces(); renderLegend(); apply(); autoLocate(); });
+map.on("load", ()=>{ addOverlays(); buildProvinces(); apply(); autoLocate(); });
 
 // ==== Đổi nền Sáng / Tối ====
 const CUSTOM_SOURCE_IDS=["prov","islands","bc"];
@@ -279,21 +272,12 @@ function renderList(){
     frag.appendChild(d);
   });
   elList.innerHTML="";
-  updateLegend();
   if(current.length>400){
     const note=document.createElement("div"); note.className="count"; note.style.padding="8px 12px";
     note.innerHTML=`Hiển thị 400/${current.length.toLocaleString("vi-VN")} mục gần nhất — lọc tỉnh hoặc tìm kiếm để thu hẹp.`;
     elList.appendChild(note);
   }
   elList.appendChild(frag);
-}
-function renderLegend(){
-  const el=document.getElementById("legend"); if(!el) return;
-  el.innerHTML=REGIONS.map(r=>`<div class="lg-row"><i class="lg-dot" style="background:${COLOR_OF_REGION[r]}"></i><span class="lg-nm">${r}</span> <b data-rg="${r}">0</b></div>`).join("");
-}
-function updateLegend(){
-  const c={}; for(const f of current){ const r=f.properties._rg; if(r) c[r]=(c[r]||0)+1; }
-  REGIONS.forEach(r=>{ const b=document.querySelector('#legend b[data-rg="'+r+'"]'); if(b) b.textContent=(c[r]||0).toLocaleString("vi-VN"); });
 }
 
 // ==== Bưu cục gần tôi ====
