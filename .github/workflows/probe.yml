@@ -11,7 +11,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Dò schema
+      - name: Dò + dump gateway
         env:
           GHN_DATA_TOKEN: ${{ secrets.GHN_DATA_TOKEN }}
         run: python probe.py
+      - name: Upload dump
+        uses: actions/upload-artifact@v4
+        with:
+          name: gateway-dump
+          path: gateway-dump.json
