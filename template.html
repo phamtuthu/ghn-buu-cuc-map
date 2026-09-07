@@ -122,6 +122,8 @@ map.addControl(new maplibregl.NavigationControl({visualizePitch:false}), "top-ri
 map.addControl(new maplibregl.FullscreenControl(), "top-right");
 const geo = new maplibregl.GeolocateControl({ positionOptions:{enableHighAccuracy:true}, trackUserLocation:true });
 map.addControl(geo, "top-right");
+// Bám kích thước khung chứa (quan trọng khi nhúng iframe / trang responsive đổi kích thước sau khi load)
+try{ new ResizeObserver(()=>{ try{ map.resize(); }catch(e){} }).observe(document.getElementById("map")); }catch(e){}
 
 let _ghnImg=null;
 function _ensureGhn(){ try{ if(_ghnImg && map.isStyleLoaded() && !map.hasImage("ghn")){ map.addImage("ghn", _ghnImg); map.triggerRepaint && map.triggerRepaint(); } }catch(e){} }
