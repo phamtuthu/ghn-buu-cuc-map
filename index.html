@@ -51,6 +51,9 @@
     #side{ width:100%; min-width:0; height:48%; border-right:none; border-bottom:1px solid var(--line); }
     #map{ height:52%; }
   }
+  /* Chế độ nhúng chỉ bản đồ: ?embed=map -> ẩn sidebar, map full khung */
+  body.embed-map #side{ display:none !important; }
+  body.embed-map #map{ height:100% !important; width:100% !important; }
 </style>
 </head>
 <body>
@@ -94,6 +97,8 @@ const REGION_COLORS = ["#1baf7a","#2a78d6","#eb6834","#008300","#e87ba4","#eda10
 const COLOR_OF_REGION = {}; REGIONS.forEach((r,i)=>{ COLOR_OF_REGION[r] = REGION_COLORS[i % REGION_COLORS.length]; });
 function regionColorExpr(){ const e=["match",["get","_rg"]]; REGIONS.forEach(r=>{ e.push(r, COLOR_OF_REGION[r]); }); e.push("#c9ccd1"); return e; }
 const ALL = DATA.features;
+// Chế độ nhúng chỉ bản đồ: thêm ?embed=map vào URL -> ẩn sidebar (đặt trước khi khởi tạo map)
+if(new URLSearchParams(location.search).get("embed")==="map") document.body.classList.add("embed-map");
 let addrMode = "cu";   // "cu" = địa chỉ cũ (3 cấp), "moi" = địa chỉ mới 2026 (2 cấp)
 function provOf(p){ return addrMode==="moi" ? (p.tinh_moi||"") : (p.tinh||""); }
 function wardKeyOf(p){ return addrMode==="moi" ? (p.phuong_moi||"") : ((p.huyen||"")+"|||"+(p.phuong||"")); }
